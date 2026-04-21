@@ -333,6 +333,24 @@ nav {
   transition: all 0.2s;
 }
 .chat-fab:hover { background: var(--green-light); transform: scale(1.05); }
+.chat-fab.pulse { animation: fabpulse 2s ease-in-out 3; }
+@keyframes fabpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(64,145,108,0.4); } 50% { box-shadow: 0 0 0 10px rgba(64,145,108,0); } }
+.chat-fab-label {
+  position: fixed; bottom: 32px; right: 84px;
+  background: var(--card); border: 0.5px solid var(--border);
+  border-radius: 8px; padding: 6px 12px;
+  font-size: 13px; font-weight: 500; color: var(--text);
+  white-space: nowrap; z-index: 500;
+  animation: labelfade 4s ease forwards;
+  pointer-events: none;
+}
+.chat-fab-label::after {
+  content: ''; position: absolute; right: -6px; top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-left-color: var(--border);
+}
+@keyframes labelfade { 0%,60% { opacity:1; } 100% { opacity:0; } }
 .chat-window {
   position: fixed; bottom: 88px; right: 24px; width: 340px; max-height: 500px;
   background: var(--card); border: 0.5px solid var(--border);
@@ -553,7 +571,7 @@ nav {
             <li><span class="check">✓</span> Leaderboard ranking</li>
             <li><span class="check">✓</span> $1.80 per swing vs $2.99</li>
           </ul>
-          <button class="btn-primary" style="width:100%">Buy 5-swing pack</button>
+          <button class="btn-primary" style="width:100%" onclick="buyCredits('pack')">Buy 5-swing pack</button>
         </div>
         <div class="pricing-card">
           <div class="plan-name">Single swing</div>
@@ -566,7 +584,7 @@ nav {
             <li><span class="check">✓</span> Leaderboard ranking</li>
             <li><span class="check">✓</span> No commitment</li>
           </ul>
-          <button class="btn-ghost" style="width:100%">Buy single swing</button>
+          <button class="btn-ghost" style="width:100%" onclick="buyCredits('single')">Buy single swing</button>
         </div>
       </div>
     </div>
@@ -721,7 +739,8 @@ nav {
 </div>
 
 <!-- AI CHAT -->
-<button class="chat-fab" id="chatFab" onclick="toggleChat()" title="Ask your AI golf coach">⛳</button>
+<div class="chat-fab-label" id="chatFabLabel">Ask your AI golf coach</div>
+<button class="chat-fab pulse" id="chatFab" onclick="toggleChat()" title="Ask your AI golf coach">⛳</button>
 <div class="chat-window" id="chatWindow">
   <div class="chat-header">
     <div class="chat-avatar">⛳</div>
@@ -1326,6 +1345,7 @@ let chatSwingContext = '';
 function toggleChat() {
   const win = document.getElementById('chatWindow');
   win.classList.toggle('open');
+  document.getElementById('chatFabLabel').style.display = 'none';
   if (win.classList.contains('open')) {
     chatApiKey = document.getElementById('apiKeyInput')?.value?.trim() || '';
     document.getElementById('chatInput').focus();
@@ -1406,6 +1426,35 @@ function removeTyping(id) {
   const el = document.getElementById(id);
   if (el) el.remove();
 }
+
+async function buyCredits(product) {
+  const btns = document.querySelectorAll('button');
+  btns.forEach(b => { if (b.onclick?.toString().includes('buyCredits')) { b.disabled = true; b.textContent = 'Loading...'; }});
+  try {
+    const res = await fetch('/api/create-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product, userId: currentUser?.id || '' })
+    });
+    const data = await res.json();
+    if (data.url) window.location.href = data.url;
+    else throw new Error('No checkout URL');
+  } catch(err) {
+    alert('Could not start checkout. Please try again.');
+    location.reload();
+  }
+}
+
+(function checkPaymentReturn() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('payment') === 'success') {
+    const credits = parseInt(params.get('credits') || '0');
+    window.history.replaceState({}, '', '/');
+    setTimeout(() => alert(`Payment successful! ${credits} swing ${credits === 1 ? 'analysis' : 'analyses'} added to your account.`), 500);
+  } else if (params.get('payment') === 'cancelled') {
+    window.history.replaceState({}, '', '/');
+  }
+})();
 </script>
 </body>
 </html>
